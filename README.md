@@ -1,10 +1,10 @@
 # Monolithic Project - DevOps Infrastructure as Code
 
-A comprehensive Infrastructure as Code (IaC) project that automates the deployment and management of a scalable web server infrastructure on AWS using Terraform and Ansible, with CI/CD orchestration via Jenkins.
+A comprehensive Infrastructure as Code (IaC) project that automates the deployment and management of a scalable web server infrastructure on AWS using Terraform and Ansible, with CI/CD orchestration through Jenkins.
 
 ## Overview
 
-This project demonstrates enterprise-grade DevOps practices by automating the entire infrastructure provisioning and application deployment lifecycle. It combines Infrastructure as Code (Terraform), Configuration Management (Ansible), and Continuous Integration/Continuous Deployment (Jenkins) to create a reproducible, scalable, and maintainable infrastructure stack.
+This project demonstrates enterprise-grade DevOps practices by automating the entire infrastructure provisioning and application deployment lifecycle. It combines Infrastructure as Code (Terraform), configuration management (Ansible), and CI/CD orchestration (Jenkins) to create a scalable, automated infrastructure on AWS.
 
 ## Features and Capabilities
 
@@ -22,16 +22,14 @@ This project demonstrates enterprise-grade DevOps practices by automating the en
 ```
 Monolithic-Project/
 ├── README.md                    # Project documentation
+├── Jenkinsfile                  # CI/CD pipeline configuration
 ├── provider.tf                  # AWS provider configuration
 ├── backend.tf                   # Remote state configuration (S3)
 ├── main.tf                      # EC2 Launch Template, Load Balancer, Auto Scaling Group
 ├── s3.tf                        # S3 bucket for state management
 ├── security.tf                  # AWS Security Groups
-├── Jenkinsfile                  # CI/CD pipeline configuration
 └── ansible/
-    ├── deployment.yml           # Ansible playbook for application deployment
-    └── inventory/
-        └── aws_ec2.yml          # Dynamic inventory plugin configuration
+    └── deployment.yml           # Ansible playbook for application deployment
 ```
 
 ### Architecture Flow
@@ -254,15 +252,78 @@ host_key_checking = False
 enable_plugins = aws_ec2
 ```
 
-### Jenkins Pipeline Configuration
+## Jenkins Pipeline Configuration
 
-The pipeline includes five stages:
+### Jenkinsfile Overview
+
+The Jenkins pipeline includes five stages that automate the entire CI/CD process:
+
+```groovy
+pipeline {
+    agent any
+
+    stages {
+        stage('Code') {
+            steps {
+                git branch: 'main', url: 'https://github.com/kailashTuta/Monolithic-Project.git'
+            }
+        }
+        stage('Init') {
+            steps {
+                sh 'echo -e "yes\n" | terraform init'
+            }
+        }
+        stage('Plan'){
+            steps {
+                sh 'terraform plan'
+            }
+        }
+        stage('Action'){
+            steps{
+                sh 'terraform $action --auto-approve'
+            }
+        }
+        stage('Deploy'){
+            steps{
+                sh 'ansible-playbook -i /opt/ansible/inventory/aws_ec2.yml ansible/deployment.yml'
+            }
+        }
+    }
+}
+```
+
+### Pipeline Stages
 
 1. **Code**: Clone the repository from GitHub
+   - Clones the main branch of the Monolithic-Project repository
+   
 2. **Init**: Initialize Terraform working directory
+   - Runs `terraform init` with auto-approval for input
+   - Initializes Terraform backend and downloads required providers
+   
 3. **Plan**: Generate infrastructure execution plan
+   - Runs `terraform plan` to preview infrastructure changes
+   - Shows what resources will be created/modified/destroyed
+   
 4. **Action**: Apply or destroy infrastructure (parameterized)
+   - Executes `terraform $action` with auto-approve flag
+   - `$action` parameter can be set to `apply` (create/update) or `destroy` (remove)
+   
 5. **Deploy**: Execute Ansible playbook for application deployment
+   - Runs Ansible playbook to configure deployed EC2 instances
+   - Uses dynamic inventory to discover and configure all running instances
+   - Installs required packages and deploys the application
+
+### Setting Up the Jenkins Job
+
+1. Create a new **Pipeline** job in Jenkins
+2. Configure the pipeline script path: `Jenkinsfile` from repository
+3. Add a string parameter `action` (default: `plan`, or `apply`/`destroy`)
+4. Configure Jenkins to use appropriate credentials for:
+   - GitHub repository access
+   - AWS access (via IAM role or credentials)
+   - SSH key for Ansible connections
+5. Trigger manually or configure GitHub webhook for automated triggers
 
 ## Usage Instructions and Examples
 
@@ -357,131 +418,6 @@ aws sts get-caller-identity
 sudo tail -f /var/log/jenkins/jenkins.log
 ```
 
-## Getting Started - Quick Start Guide
-
-Follow these steps to get the project up and running:
-
-### Step 1: Clone the Repository
-
-```bash
-git clone https://github.com/kailashTuta/Monolithic-Project.git
-cd Monolithic-Project
-```
-
-### Step 2: Install Required Dependencies
-
-```bash
-# Install Terraform
-curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-sudo apt-get update && sudo apt-get install terraform
-
-# Install Ansible
-sudo apt-get install python3-pip
-sudo pip3 install ansible boto3
-
-# Install AWS CLI
-sudo apt-get install awscli
-
-# Install Git
-sudo apt-get install git
-```
-
-### Step 3: Configure AWS Credentials
-
-```bash
-# Set up AWS credentials
-aws configure
-
-# Verify access
-aws ec2 describe-regions
-```
-
-### Step 4: Set Up S3 Backend
-
-Ensure the S3 bucket exists before initializing Terraform:
-
-```bash
-# Check if bucket exists
-aws s3 ls s3://kailash.project.monobucket/
-
-# If not, create it (optional)
-aws s3 mb s3://kailash.project.monobucket/ --region ap-south-1
-```
-
-### Step 5: Initialize Terraform
-
-```bash
-cd /opt/Monolithic-Project
-terraform init
-```
-
-### Step 6: Configure Ansible Dynamic Inventory
-
-```bash
-# Create directory structure
-mkdir -p /opt/ansible/inventory
-
-# Copy your EC2 key
-sudo cp /path/to/Docker-RSA.pem /etc/ansible/Docker-RSA.pem
-sudo chmod 600 /etc/ansible/Docker-RSA.pem
-
-# Create aws_ec2.yml inventory
-cat > /opt/ansible/inventory/aws_ec2.yml << 'EOF'
----
-plugin: aws_ec2
-regions:
-  - ap-south-1
-filters:
-  tag:aws:ec2launchtemplate:id: lt-xxxxxxxxxxxxxxx
-EOF
-
-# Update /etc/ansible/ansible.cfg
-sudo tee -a /etc/ansible/ansible.cfg > /dev/null << 'EOF'
-inventory = /opt/ansible/inventory/aws_ec2.yml
-host_key_checking = False
-enable_plugins = aws_ec2
-EOF
-```
-
-### Step 7: Plan Infrastructure Deployment
-
-```bash
-terraform plan
-```
-
-### Step 8: Build/Deploy Infrastructure
-
-```bash
-# Apply Terraform configuration
-terraform apply --auto-approve
-```
-
-### Step 9: Verify Setup with a Sample Command
-
-```bash
-# Wait for instances to be ready (2-3 minutes)
-# Check instances are running
-aws ec2 describe-instances --filters "Name=instance-state-name,Values=running"
-
-# Test deployment via Ansible
-ansible-playbook -i /opt/ansible/inventory/aws_ec2.yml ansible/deployment.yml
-
-# Verify web servers are responding
-# Get load balancer DNS name from Terraform output or AWS Console
-curl http://<load-balancer-dns>/
-```
-
-### Step 10: Run the Application
-
-```bash
-# Get Load Balancer DNS
-aws elb describe-load-balancers --load-balancer-names web-server-lb --query 'LoadBalancerDescriptions[0].DNSName' --output text
-
-# Access the application
-curl http://<load-balancer-dns>/
-```
-
 ## Technologies and Frameworks Used
 
 - **Infrastructure as Code (IaC)**:
@@ -504,6 +440,7 @@ curl http://<load-balancer-dns>/
   - **YAML**: Ansible playbooks and inventory
   - **Python**: Ansible plugins and AWS integration
   - **Bash**: Shell scripts for setup and automation
+  - **Groovy**: Jenkins pipeline scripts
   
 - **AWS Services**:
   - EC2 (Elastic Compute Cloud)
