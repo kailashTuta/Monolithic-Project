@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "one" {
-  bucket = "kailash.flm77.moonobucket"
+  bucket = "kailash.project.monobucket"
 }
 
 resource "aws_s3_bucket_ownership_controls" "two" {
@@ -11,18 +11,13 @@ resource "aws_s3_bucket_ownership_controls" "two" {
 
 resource "aws_s3_bucket_acl" "three" {
   depends_on = [aws_s3_bucket_ownership_controls.two]
-
   bucket = aws_s3_bucket.one.id
   acl    = "private"
 }
 
 resource "aws_s3_bucket_versioning" "three" {
-bucket = aws_s3_bucket.one.id
-versioning_configuration {
-status = "Enabled"
+  bucket = aws_s3_bucket.one.id
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
-}
-
-
-
-
